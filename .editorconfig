@@ -1,0 +1,14 @@
+root = true
+
+[*.cs]
+# StyleCop: не требуем file header/XML-доки на каждом элементе —
+# для тестового задания важнее читаемость, чем формальный SA-отчёт.
+dotnet_diagnostic.SA0001.severity = none
+dotnet_diagnostic.SA1633.severity = none
+dotnet_diagnostic.SA1600.severity = none
+dotnet_diagnostic.SA1601.severity = none
+dotnet_diagnostic.SA1101.severity = none
+dotnet_diagnostic.SA1200.severity = none
+dotnet_diagnostic.SA1309.severity = none
+dotnet_diagnostic.SA1413.severity = none
+dotnet_diagnostic.SA1516.severity = none
