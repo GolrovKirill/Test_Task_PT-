@@ -44,20 +44,10 @@ jobs:
       - name: Build
         run: dotnet build --no-restore -c Release
 
-      - name: Test with coverage
+      - name: Test
         run: >-
           dotnet test tests/PT.Tests/PT.Tests.csproj
           --no-build -c Release
-          --collect:"XPlat Code Coverage"
-          --results-directory TestResults
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: TestResults/**/coverage.cobertura.xml
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # Windows sanity check: build + unit tests only (no PostgreSQL service available).
   build-test-windows:
