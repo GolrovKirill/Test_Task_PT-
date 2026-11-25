@@ -2,5 +2,7 @@ namespace PT.Infrastructure.Export;
 
 public sealed class ExportOptions
 {
-    public int BatchSize { get; set; } = 100;
+    public const int DefaultBatchSize = 100;
+
+    public int BatchSize { get; set; } = DefaultBatchSize;
 }

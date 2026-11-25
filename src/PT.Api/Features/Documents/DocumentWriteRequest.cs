@@ -3,10 +3,9 @@ using PT.Domain.Enums;
 namespace PT.Api.Features.Documents;
 
 /// <summary>
-/// Клиентский контракт создания/полного обновления документа. Серверные поля
-/// (Id, CreatedAt, UpdatedAt) сюда не входят. Nullable-типы позволяют отличить
-/// «поле не прислали» от «прислали значение по умолчанию»: обязательность
-/// проверяется валидатором.
+/// Client contract for creating or fully updating a document. Server-managed fields
+/// (Id, CreatedAt, UpdatedAt) are not part of it. Nullable types distinguish "field omitted"
+/// from "explicit default value"; requiredness is enforced by the validator.
 /// </summary>
 public sealed record DocumentWriteRequest
 {

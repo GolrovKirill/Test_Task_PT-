@@ -14,6 +14,9 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+const int HttpClientTimeoutSeconds = 5;
+const int MigrationRetryDelaySeconds = 2;
+
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? builder.Configuration["DB_CONNECTION"];
 
@@ -40,13 +43,13 @@ builder.Services.AddHttpClient<IEventPublisher, HttpEventPublisher>(client =>
 {
     var mockSiemBaseUrl = builder.Configuration["MockSiem:BaseUrl"] ?? "http://127.0.0.1:5082/";
     client.BaseAddress = new Uri(mockSiemBaseUrl.TrimEnd('/') + "/", UriKind.Absolute);
-    client.Timeout = TimeSpan.FromSeconds(5);
+    client.Timeout = TimeSpan.FromSeconds(HttpClientTimeoutSeconds);
 });
 builder.Services.AddHttpClient<IExternalDocumentExporter, HttpDocumentExporter>(client =>
 {
     var mockSiemBaseUrl = builder.Configuration["MockSiem:BaseUrl"] ?? "http://127.0.0.1:5082/";
     client.BaseAddress = new Uri(mockSiemBaseUrl.TrimEnd('/') + "/", UriKind.Absolute);
-    client.Timeout = TimeSpan.FromSeconds(5);
+    client.Timeout = TimeSpan.FromSeconds(HttpClientTimeoutSeconds);
 });
 
 if (builder.Configuration.GetValue("Outbox:DispatcherEnabled", true))
@@ -98,10 +101,11 @@ static async Task ApplyMigrationsAsync(IServiceProvider services)
         {
             logger.LogWarning(
                 exception,
-                "Database migration attempt {Attempt}/{MaxAttempts} failed; retrying in 2s",
+                "Database migration attempt {Attempt}/{MaxAttempts} failed; retrying in {DelaySeconds}s",
                 attempt,
-                maxAttempts);
-            await Task.Delay(TimeSpan.FromSeconds(2));
+                maxAttempts,
+                MigrationRetryDelaySeconds);
+            await Task.Delay(TimeSpan.FromSeconds(MigrationRetryDelaySeconds));
         }
     }
 }

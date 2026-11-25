@@ -12,11 +12,13 @@ public sealed class HttpDocumentExporter(
     ILogger<HttpDocumentExporter> logger) : IExternalDocumentExporter
 {
     private const int MaxAttempts = 3;
+    private const int FirstRetryDelayMs = 200;
+    private const int SecondRetryDelayMs = 400;
 
     private static readonly TimeSpan[] Delays =
     [
-        TimeSpan.FromMilliseconds(200),
-        TimeSpan.FromMilliseconds(400),
+        TimeSpan.FromMilliseconds(FirstRetryDelayMs),
+        TimeSpan.FromMilliseconds(SecondRetryDelayMs),
     ];
 
     private static readonly JsonSerializerOptions JsonOptions = CreateOptions();
@@ -100,7 +102,7 @@ public sealed class HttpDocumentExporter(
     private static bool IsRetryable(HttpStatusCode statusCode) =>
         statusCode == HttpStatusCode.RequestTimeout
         || statusCode == HttpStatusCode.TooManyRequests
-        || (int)statusCode >= 500;
+        || (int)statusCode >= (int)HttpStatusCode.InternalServerError;
 
     private static JsonSerializerOptions CreateOptions()
     {

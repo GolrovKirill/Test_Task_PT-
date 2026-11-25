@@ -6,8 +6,8 @@ using Npgsql;
 namespace PT.Api.Common;
 
 /// <summary>
-/// Единый формат ошибок: 400 для битого JSON/значения, 409 для конфликта
-/// уникальности, 499 для отмены клиентом, 500 — без стектрейса наружу.
+/// Maps exceptions to a single problem-details shape: 400 for malformed JSON/values,
+/// 409 for unique violations, 499 for client aborts and 500 (without stack traces) otherwise.
 /// </summary>
 public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
@@ -18,8 +18,7 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
         Exception exception,
         CancellationToken cancellationToken)
     {
-        // TaskCanceledException является наследником OperationCanceledException,
-        // поэтому отдельная ветка для него не нужна.
+        // TaskCanceledException derives from OperationCanceledException, so a dedicated branch is not needed.
         if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
         {
             logger.LogDebug(exception, "Request aborted by client");

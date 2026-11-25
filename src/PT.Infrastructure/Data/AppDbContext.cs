@@ -54,7 +54,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         document.Property(x => x.Status).HasConversion<string>().HasMaxLength(50);
         document.Property(x => x.Confidentiality).HasConversion<string>().HasMaxLength(50);
 
-        // Npgsql: нативные массивы; metadata — jsonb через конвертер.
+        // Native PostgreSQL arrays; Metadata is mapped to jsonb through a value converter below.
         document.Property(x => x.Tags).HasColumnType("text[]").IsRequired();
         document.Property(x => x.RelatedDocumentIds).HasColumnType("uuid[]").IsRequired();
 
@@ -68,7 +68,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             .HasColumnType("jsonb")
             .IsRequired();
 
-        // Внутренняя колонка для регистронезависимой уникальности title.
+        // Internal computed column enforcing case-insensitive title uniqueness.
         document.Property<string>("TitleKey")
             .HasComputedColumnSql("lower(\"Title\")", stored: true);
         document.HasIndex("TitleKey").IsUnique();

@@ -4,16 +4,17 @@ using Microsoft.EntityFrameworkCore.Design;
 namespace PT.Infrastructure.Data;
 
 /// <summary>
-/// Нужен, чтобы `dotnet ef migrations add` не зависел от запуска API,
-/// user-secrets и конфигурации хоста.
+/// Lets the EF Core CLI run migrations without starting the API host.
+/// The connection string must be provided via the <c>DB_CONNECTION</c> environment
+/// variable; no credentials are stored in source code.
 /// </summary>
 public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args)
     {
-        var connectionString =
-            Environment.GetEnvironmentVariable("DB_CONNECTION")
-            ?? "Host=localhost;Port=5432;Database=pt_test_db;Username=postgres;Password=postgres";
+        var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION")
+            ?? throw new InvalidOperationException(
+                "Set the DB_CONNECTION environment variable before running the EF Core CLI.");
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(connectionString)

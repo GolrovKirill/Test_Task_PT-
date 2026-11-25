@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PT.Infrastructure.Data;
 
@@ -8,12 +9,16 @@ public sealed class DocumentExportService(
     AppDbContext db,
     IExternalDocumentExporter exporter,
     IOptions<ExportOptions> options,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    ILogger<DocumentExportService> logger)
 {
+    private const int MinBatchSize = 1;
+    private const int MaxBatchSize = 500;
+
     public async Task<ExportResult> ExportAllAsync(CancellationToken cancellationToken)
     {
         var started = timeProvider.GetUtcNow();
-        var batchSize = Math.Clamp(options.Value.BatchSize, 1, 500);
+        var batchSize = Math.Clamp(options.Value.BatchSize, MinBatchSize, MaxBatchSize);
 
         var ids = await db.Documents
             .AsNoTracking()
@@ -59,10 +64,23 @@ public sealed class DocumentExportService(
             catch (Exception exception)
             {
                 errors.Add(new ExportBatchError(batchNumber, exception.Message));
+                logger.LogWarning(
+                    exception,
+                    "Export batch {BatchNumber} failed ({Count} documents)",
+                    batchNumber,
+                    documents.Count);
             }
         }
 
         var duration = (long)(timeProvider.GetUtcNow() - started).TotalMilliseconds;
+
+        logger.LogInformation(
+            "Export finished: total={Total} exported={Exported} failed={Failed} batches={Batches} durationMs={DurationMs}",
+            ids.Count,
+            exported,
+            ids.Count - exported,
+            batches,
+            duration);
 
         return new ExportResult(
             Total: ids.Count,

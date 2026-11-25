@@ -6,8 +6,28 @@ namespace PT.Api.Features.Documents;
 
 public sealed class DocumentWriteRequestValidator : AbstractValidator<DocumentWriteRequest>
 {
+    private const int MinTitleLength = 3;
+    private const int MaxTitleLength = 200;
+    private const int MaxDescriptionLength = 2000;
+    private const int MaxContentLength = 20000;
+    private const int MinPriority = 0;
+    private const int MaxPriority = 100;
+    private const decimal MinQualityScore = -99.99m;
+    private const decimal MaxQualityScore = 99.99m;
+    private const int QualityScorePrecision = 4;
+    private const int QualityScoreScale = 2;
+    private const long MinSizeBytes = 0L;
+    private const long MaxSizeBytes = 1_000_000_000_000L;
+    private const int MaxTagsCount = 20;
+    private const int MaxTagLength = 50;
+    private const int MaxRelatedDocuments = 10;
+    private const int MaxOwnerEmailLength = 254;
+    private const int MaxMetadataEntries = 20;
+    private const int MaxMetadataKeyLength = 50;
+    private const int MaxMetadataValueLength = 200;
+
     private static readonly Regex MetadataKeyPattern = new(
-        "^[a-z0-9_.-]{1,50}$",
+        $"^[a-z0-9_.-]{{1,{MaxMetadataKeyLength}}}$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public DocumentWriteRequestValidator()
@@ -17,16 +37,16 @@ public sealed class DocumentWriteRequestValidator : AbstractValidator<DocumentWr
         RuleFor(x => x.Title)
             .NotNull().WithMessage("title обязателен.")
             .Must(title => !string.IsNullOrWhiteSpace(title)).WithMessage("title не может быть пустым.")
-            .Must(title => title is not null && title.Trim().Length is >= 3 and <= 200)
+            .Must(title => title is not null && title.Trim().Length is >= MinTitleLength and <= MaxTitleLength)
             .WithMessage("title должен быть от 3 до 200 символов (без учёта пробелов по краям).");
 
         RuleFor(x => x.Description)
-            .MaximumLength(2000).WithMessage("description не должен превышать 2000 символов.");
+            .MaximumLength(MaxDescriptionLength).WithMessage("description не должен превышать 2000 символов.");
 
         RuleFor(x => x.Content)
             .NotNull().WithMessage("content обязателен.")
             .Must(content => !string.IsNullOrWhiteSpace(content)).WithMessage("content не может быть пустым.")
-            .MaximumLength(20000).WithMessage("content не должен превышать 20000 символов.");
+            .MaximumLength(MaxContentLength).WithMessage("content не должен превышать 20000 символов.");
 
         RuleFor(x => x.DocumentType)
             .NotNull().WithMessage("documentType обязателен.");
@@ -39,35 +59,35 @@ public sealed class DocumentWriteRequestValidator : AbstractValidator<DocumentWr
 
         RuleFor(x => x.Priority)
             .NotNull().WithMessage("priority обязателен.")
-            .InclusiveBetween(0, 100).WithMessage("priority должен быть от 0 до 100.");
+            .InclusiveBetween(MinPriority, MaxPriority).WithMessage("priority должен быть от 0 до 100.");
 
         RuleFor(x => x.QualityScore)
             .NotNull().WithMessage("qualityScore обязателен.")
-            .InclusiveBetween(-99.99m, 99.99m).WithMessage("qualityScore должен быть от -99.99 до 99.99.")
-            .PrecisionScale(4, 2, false).WithMessage("qualityScore должен иметь не более 2 знаков после запятой.");
+            .InclusiveBetween(MinQualityScore, MaxQualityScore).WithMessage("qualityScore должен быть от -99.99 до 99.99.")
+            .PrecisionScale(QualityScorePrecision, QualityScoreScale, false).WithMessage("qualityScore должен иметь не более 2 знаков после запятой.");
 
         RuleFor(x => x.SizeBytes)
             .NotNull().WithMessage("sizeBytes обязателен.")
-            .InclusiveBetween(0L, 1_000_000_000_000L).WithMessage("sizeBytes должен быть от 0 до 1 000 000 000 000.");
+            .InclusiveBetween(MinSizeBytes, MaxSizeBytes).WithMessage("sizeBytes должен быть от 0 до 1 000 000 000 000.");
 
         RuleFor(x => x.Tags)
             .NotNull().WithMessage("tags не может быть null.")
-            .Must(tags => tags is null || tags.Length <= 20).WithMessage("tags: не более 20 элементов.")
-            .Must(tags => tags is null || tags.All(tag => !string.IsNullOrWhiteSpace(tag) && tag.Length <= 50))
+            .Must(tags => tags is null || tags.Length <= MaxTagsCount).WithMessage("tags: не более 20 элементов.")
+            .Must(tags => tags is null || tags.All(tag => !string.IsNullOrWhiteSpace(tag) && tag.Length <= MaxTagLength))
             .WithMessage("tags: каждый тег должен быть непустой строкой до 50 символов.")
             .Must(tags => tags is null || tags.Distinct(StringComparer.OrdinalIgnoreCase).Count() == tags.Length)
             .WithMessage("tags: значения не должны повторяться.");
 
         RuleFor(x => x.RelatedDocumentIds)
             .NotNull().WithMessage("relatedDocumentIds не может быть null.")
-            .Must(ids => ids is null || ids.Length <= 10).WithMessage("relatedDocumentIds: не более 10 элементов.")
+            .Must(ids => ids is null || ids.Length <= MaxRelatedDocuments).WithMessage("relatedDocumentIds: не более 10 элементов.")
             .Must(ids => ids is null || ids.Distinct().Count() == ids.Length)
             .WithMessage("relatedDocumentIds: значения не должны повторяться.");
 
         RuleFor(x => x.OwnerEmail)
             .NotNull().WithMessage("ownerEmail обязателен.")
             .Must(email => !string.IsNullOrWhiteSpace(email)).WithMessage("ownerEmail не может быть пустым.")
-            .MaximumLength(254).WithMessage("ownerEmail не должен превышать 254 символа.")
+            .MaximumLength(MaxOwnerEmailLength).WithMessage("ownerEmail не должен превышать 254 символа.")
             .EmailAddress().WithMessage("ownerEmail должен быть валидным email.");
 
         RuleFor(x => x.EffectiveFrom)
@@ -80,12 +100,12 @@ public sealed class DocumentWriteRequestValidator : AbstractValidator<DocumentWr
 
         RuleFor(x => x.Metadata)
             .NotNull().WithMessage("metadata не может быть null.")
-            .Must(metadata => metadata is null || metadata.Count <= 20).WithMessage("metadata: не более 20 пар.")
+            .Must(metadata => metadata is null || metadata.Count <= MaxMetadataEntries).WithMessage("metadata: не более 20 пар.")
             .Must(metadata => metadata is null || metadata.All(pair => MetadataKeyPattern.IsMatch(pair.Key)))
             .WithMessage("metadata: ключи должны соответствовать ^[a-z0-9_.-]{1,50}$.")
             .Must(metadata => metadata is null || metadata.All(pair => pair.Value is not null))
             .WithMessage("metadata: значения не могут быть null.")
-            .Must(metadata => metadata is null || metadata.All(pair => pair.Value is null || pair.Value.Length <= 200))
+            .Must(metadata => metadata is null || metadata.All(pair => pair.Value is null || pair.Value.Length <= MaxMetadataValueLength))
             .WithMessage("metadata: значения не должны превышать 200 символов.");
 
         RuleFor(x => x.Confidentiality)

@@ -1,3 +1,3 @@
--- Отдельная БД для интеграционных тестов.
--- Скрипт выполняется только при первой инициализации пустого volume.
+-- Separate database for integration tests.
+-- This script runs only on first initialization of an empty volume.
 CREATE DATABASE pt_test_db_tests;

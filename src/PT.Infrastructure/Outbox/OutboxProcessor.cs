@@ -15,9 +15,9 @@ public sealed class OutboxProcessor(
 {
     public const int MaxRetries = 8;
     public const int DefaultBatchSize = 50;
+    private const int MaxBackoffSeconds = 60;
 
-    // Бронь должна быть длиннее, чем максимальная обработка пачки:
-    // 50 сообщений * 5 секунд таймаута HTTP = 250 секунд.
+    // The lease must outlive the worst-case batch: 50 messages * 5s HTTP timeout = 250s.
     private static readonly TimeSpan ClaimLease = TimeSpan.FromMinutes(5);
 
     public async Task<int> ProcessBatchAsync(
@@ -26,7 +26,7 @@ public sealed class OutboxProcessor(
     {
         var now = timeProvider.GetUtcNow();
 
-        // Короткая транзакция: только забронировать строки.
+        // Short transaction: only claim the rows.
         var ids = await ClaimBatchAsync(batchSize, now, cancellationToken);
         if (ids.Count == 0)
         {
@@ -73,15 +73,14 @@ public sealed class OutboxProcessor(
                     message.RetryCount);
             }
 
-            // Сохраняем результат каждого сообщения отдельно:
-            // падение процесса не откатит уже опубликованные сообщения.
+            // Persist each message separately so a crash never rolls back already-published ones.
             await db.SaveChangesAsync(cancellationToken);
         }
 
         return messages.Count;
 
         static TimeSpan GetBackoff(int retryCount) =>
-            TimeSpan.FromSeconds(Math.Min(60, Math.Pow(2, retryCount)));
+            TimeSpan.FromSeconds(Math.Min(MaxBackoffSeconds, Math.Pow(2, retryCount)));
     }
 
     private async Task<List<Guid>> ClaimBatchAsync(
@@ -89,8 +88,7 @@ public sealed class OutboxProcessor(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        // Транзакция нужна только для SELECT ... FOR UPDATE + UPDATE lease.
-        // HTTP-запросы внутри неё не выполняются.
+        // The transaction only wraps SELECT ... FOR UPDATE + the lease UPDATE; no HTTP inside.
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
         var ids = await db.Database.SqlQueryRaw<Guid>(
@@ -114,8 +112,7 @@ public sealed class OutboxProcessor(
             return ids;
         }
 
-        // Теперь строки забронированы на ClaimLease.
-        // Пока NextAttemptOn в будущем, другие воркеры их не возьмут.
+        // Rows are now leased for ClaimLease; while NextAttemptOn is in the future other workers skip them.
         var leaseUntil = now.Add(ClaimLease);
 
         await db.OutboxMessages

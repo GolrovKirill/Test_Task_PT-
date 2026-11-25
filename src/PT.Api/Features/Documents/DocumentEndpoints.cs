@@ -13,46 +13,52 @@ namespace PT.Api.Features.Documents;
 
 public static class DocumentEndpoints
 {
+    private const int DefaultPage = 1;
+    private const int DefaultPageSize = 20;
+    private const int DefaultEventSince = 0;
+    private const int DefaultEventLimit = 100;
+    private const int FeedLookahead = 1;
+
     public static IEndpointRouteBuilder MapDocumentEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/v1/documents").WithTags("Documents");
 
         group.MapPost(string.Empty, CreateAsync)
-            .WithSummary("Создать документ")
-            .WithDescription("Создаёт документ и событие DocumentCreated в той же транзакции.")
+            .WithSummary("Create a document")
+            .WithDescription("Creates a document and a DocumentCreated event in the same transaction.")
             .Produces<Document>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .AddEndpointFilter<ValidationFilter<DocumentWriteRequest>>();
 
         group.MapGet(string.Empty, ListAsync)
-            .WithSummary("Получить список документов")
-            .WithDescription("Offset-пагинация: page от 1, pageSize от 1 до 100. Порядок: createdAt desc, id desc.")
+            .WithSummary("List documents")
+            .WithDescription("Offset pagination: page from 1, pageSize from 1 to 100. Order: createdAt desc, id desc.")
             .Produces<PagedResult<Document>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .AddEndpointFilter<ValidationFilter<DocumentListQuery>>();
 
         group.MapGet("/events", ListEventsAsync)
-            .WithSummary("Лента событий изменений")
-            .WithDescription("since — исключающий курсор sequence; limit 1..200, default 100.")
+            .WithSummary("Document change event feed")
+            .WithDescription("since — exclusive sequence cursor; limit 1..200, default 100.")
             .Produces<DocumentEventFeedPage>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .AddEndpointFilter<ValidationFilter<DocumentEventQuery>>();
 
         group.MapPost("/export", ExportAsync)
-            .WithSummary("Экспортировать все документы в MockSiem")
-            .WithDescription("Батчи по 100 (настраивается), retry на 5xx/408/429, upsert по id.")
+            .WithSummary("Export all documents to MockSiem")
+            .WithDescription("Batches of 100 (configurable), retries on 5xx/408/429, upsert by id.")
             .Produces<ExportResult>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status502BadGateway);
 
         group.MapGet("/{id:guid}", GetByIdAsync)
-            .WithSummary("Получить документ по Id")
+            .WithSummary("Get a document by id")
             .Produces<Document>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPut("/{id:guid}", UpdateAsync)
-            .WithSummary("Полностью обновить документ")
-            .WithDescription("Заменяет 17 клиентских полей и пишет событие DocumentUpdated.")
+            .WithSummary("Fully update a document")
+            .WithDescription("Replaces the 17 client fields and writes a DocumentUpdated event.")
             .Produces<Document>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -60,8 +66,8 @@ public static class DocumentEndpoints
             .AddEndpointFilter<ValidationFilter<DocumentWriteRequest>>();
 
         group.MapDelete("/{id:guid}", DeleteAsync)
-            .WithSummary("Удалить документ")
-            .WithDescription("Удаляет документ и пишет событие DocumentDeleted.")
+            .WithSummary("Delete a document")
+            .WithDescription("Deletes a document and writes a DocumentDeleted event.")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
@@ -102,8 +108,8 @@ public static class DocumentEndpoints
         AppDbContext db,
         CancellationToken cancellationToken)
     {
-        var page = query.Page ?? 1;
-        var pageSize = query.PageSize ?? 20;
+        var page = query.Page ?? DefaultPage;
+        var pageSize = query.PageSize ?? DefaultPageSize;
 
         var totalItems = await db.Documents.CountAsync(cancellationToken);
         var items = await db.Documents
@@ -126,14 +132,14 @@ public static class DocumentEndpoints
         AppDbContext db,
         CancellationToken cancellationToken)
     {
-        var since = query.Since ?? 0;
-        var limit = query.Limit ?? 100;
+        var since = query.Since ?? DefaultEventSince;
+        var limit = query.Limit ?? DefaultEventLimit;
 
         var messages = await db.OutboxMessages
             .AsNoTracking()
             .Where(x => x.Sequence > since)
             .OrderBy(x => x.Sequence)
-            .Take(limit + 1)
+            .Take(limit + FeedLookahead)
             .ToListAsync(cancellationToken);
 
         var hasMore = messages.Count > limit;

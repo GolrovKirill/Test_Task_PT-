@@ -3,8 +3,8 @@ using FluentValidation;
 namespace PT.Api.Common;
 
 /// <summary>
-/// Запускает FluentValidation для аргумента типа <typeparamref name="T"/>
-/// и возвращает 400 с ошибками по полям до входа в обработчик.
+/// Runs FluentValidation for the endpoint argument of type <typeparamref name="T"/>
+/// and returns 400 with per-field errors before the handler executes.
 /// </summary>
 public sealed class ValidationFilter<T>(IValidator<T> validator) : IEndpointFilter
 {

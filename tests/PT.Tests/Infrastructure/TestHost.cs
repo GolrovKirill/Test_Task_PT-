@@ -13,11 +13,11 @@ namespace PT.Tests.Integration;
 [SetUpFixture]
 public sealed class TestHost
 {
-    private const string DefaultConnectionString =
-        "Host=127.0.0.1;Port=5432;Database=pt_test_db_tests;Username=postgres;Password=postgres";
-
     public static string ConnectionString { get; } =
-        Environment.GetEnvironmentVariable("TEST_DB_CONNECTION") ?? DefaultConnectionString;
+        Environment.GetEnvironmentVariable("TEST_DB_CONNECTION")
+        ?? throw new InvalidOperationException(
+            "Set the TEST_DB_CONNECTION environment variable before running tests "
+            + "(e.g. run ./scripts/test.sh, or export it manually).");
 
     public static WebApplicationFactory<Program> Factory { get; private set; } = null!;
 

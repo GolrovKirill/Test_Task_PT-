@@ -3,8 +3,8 @@ using PT.Domain.Enums;
 namespace PT.Domain.Entities;
 
 /// <summary>
-/// Документ — основная сущность задания: 20 полей, 17 клиентских и 3 серверных
-/// (Id, CreatedAt, UpdatedAt).
+/// The main aggregate: 20 fields — 17 client-settable and 3 server-managed
+/// (<see cref="Id"/>, <see cref="CreatedAt"/>, <see cref="UpdatedAt"/>).
 /// </summary>
 public sealed class Document
 {
