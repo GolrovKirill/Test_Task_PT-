@@ -3,9 +3,12 @@ using System.Text.Json.Serialization;
 using FluentValidation;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using PT.Api.Common;
 using PT.Api.Features.Documents;
 using PT.Infrastructure.Data;
+using PT.Infrastructure.Events;
+using PT.Infrastructure.Outbox;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,6 +30,21 @@ builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadReq
 builder.Services.AddValidatorsFromAssemblyContaining<DocumentWriteRequestValidator>();
 builder.Services.AddScoped<ValidationFilter<DocumentWriteRequest>>();
 builder.Services.AddScoped<ValidationFilter<DocumentListQuery>>();
+builder.Services.AddScoped<ValidationFilter<DocumentEventQuery>>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.AddScoped<OutboxProcessor>();
+builder.Services.AddHttpClient<IEventPublisher, HttpEventPublisher>(client =>
+{
+    var mockSiemBaseUrl = builder.Configuration["MockSiem:BaseUrl"] ?? "http://127.0.0.1:5082/";
+    client.BaseAddress = new Uri(mockSiemBaseUrl.TrimEnd('/') + "/", UriKind.Absolute);
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
+if (builder.Configuration.GetValue("Outbox:DispatcherEnabled", true))
+{
+    builder.Services.AddHostedService<OutboxDispatcher>();
+}
+
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(

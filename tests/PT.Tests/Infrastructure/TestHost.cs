@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using NUnit.Framework;
 using PT.Infrastructure.Data;
+using PT.Infrastructure.Events;
 
 namespace PT.Tests.Integration;
 
@@ -18,8 +20,12 @@ public sealed class TestHost
 
     public static WebApplicationFactory<Program> Factory { get; private set; } = null!;
 
+    public static RecordingEventPublisher EventPublisher { get; private set; } = null!;
+
     public static async Task ResetDatabaseAsync()
     {
+        EventPublisher.Clear();
+
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.ExecuteSqlRawAsync(
@@ -54,7 +60,15 @@ public sealed class TestHost
         await EnsureDatabaseAsync();
 
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", ConnectionString);
-        Factory = new WebApplicationFactory<Program>();
+        Environment.SetEnvironmentVariable("Outbox__DispatcherEnabled", "false");
+
+        EventPublisher = new RecordingEventPublisher();
+        Factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IEventPublisher>();
+                services.AddSingleton<IEventPublisher>(EventPublisher);
+            }));
 
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -66,5 +80,6 @@ public sealed class TestHost
     {
         Factory.Dispose();
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", null);
+        Environment.SetEnvironmentVariable("Outbox__DispatcherEnabled", null);
     }
 }

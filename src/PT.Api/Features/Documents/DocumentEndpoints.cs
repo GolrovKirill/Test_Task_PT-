@@ -1,9 +1,12 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using PT.Api.Common;
 using PT.Domain.Entities;
+using PT.Domain.Events;
 using PT.Infrastructure.Data;
+using PT.Infrastructure.Outbox;
 
 namespace PT.Api.Features.Documents;
 
@@ -15,7 +18,7 @@ public static class DocumentEndpoints
 
         group.MapPost(string.Empty, CreateAsync)
             .WithSummary("Создать документ")
-            .WithDescription("Создаёт документ. Id и даты CreatedAt/UpdatedAt назначает сервер.")
+            .WithDescription("Создаёт документ и событие DocumentCreated в той же транзакции.")
             .Produces<Document>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status409Conflict)
@@ -28,6 +31,13 @@ public static class DocumentEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .AddEndpointFilter<ValidationFilter<DocumentListQuery>>();
 
+        group.MapGet("/events", ListEventsAsync)
+            .WithSummary("Лента событий изменений")
+            .WithDescription("since — исключающий курсор sequence; limit 1..200, default 100.")
+            .Produces<DocumentEventFeedPage>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .AddEndpointFilter<ValidationFilter<DocumentEventQuery>>();
+
         group.MapGet("/{id:guid}", GetByIdAsync)
             .WithSummary("Получить документ по Id")
             .Produces<Document>(StatusCodes.Status200OK)
@@ -35,7 +45,7 @@ public static class DocumentEndpoints
 
         group.MapPut("/{id:guid}", UpdateAsync)
             .WithSummary("Полностью обновить документ")
-            .WithDescription("Заменяет 17 клиентских полей. Id и CreatedAt не меняются, UpdatedAt обновляется.")
+            .WithDescription("Заменяет 17 клиентских полей и пишет событие DocumentUpdated.")
             .Produces<Document>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -44,6 +54,7 @@ public static class DocumentEndpoints
 
         group.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Удалить документ")
+            .WithDescription("Удаляет документ и пишет событие DocumentDeleted.")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
@@ -65,7 +76,15 @@ public static class DocumentEndpoints
 
         Apply(document, request);
 
+        var documentEvent = new DocumentEvent(
+            Guid.NewGuid(),
+            document.Id,
+            DocumentEventTypes.Created,
+            now,
+            document);
+
         db.Documents.Add(document);
+        db.OutboxMessages.Add(OutboxMessageFactory.Create(documentEvent));
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Created($"/api/v1/documents/{document.Id}", document);
@@ -95,6 +114,53 @@ public static class DocumentEndpoints
         return Results.Ok(new PagedResult<Document>(items, page, pageSize, totalItems, totalPages));
     }
 
+    private static async Task<IResult> ListEventsAsync(
+        [AsParameters] DocumentEventQuery query,
+        AppDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var since = query.Since ?? 0;
+        var limit = query.Limit ?? 100;
+
+        var messages = await db.OutboxMessages
+            .AsNoTracking()
+            .Where(x => x.Sequence > since)
+            .OrderBy(x => x.Sequence)
+            .Take(limit + 1)
+            .ToListAsync(cancellationToken);
+
+        var hasMore = messages.Count > limit;
+        if (hasMore)
+        {
+            messages.RemoveAt(messages.Count - 1);
+        }
+
+        var items = new List<DocumentEventFeedItem>(messages.Count);
+
+        foreach (var message in messages)
+        {
+            var documentEvent = JsonSerializer.Deserialize<DocumentEvent>(
+                                    message.Payload,
+                                    DocumentEventJson.Options)
+                                ?? throw new InvalidOperationException(
+                                    $"Outbox message {message.Id} has an invalid payload.");
+
+            items.Add(new DocumentEventFeedItem(
+                message.Sequence,
+                documentEvent.EventId,
+                documentEvent.DocumentId,
+                documentEvent.EventType,
+                documentEvent.OccurredAt,
+                documentEvent.Document,
+                message.ProcessedOn is not null,
+                message.RetryCount));
+        }
+
+        var nextSince = items.Count == 0 ? since : items[^1].Sequence;
+
+        return Results.Ok(new DocumentEventFeedPage(items, nextSince, hasMore));
+    }
+
     private static async Task<IResult> GetByIdAsync(
         Guid id,
         AppDbContext db,
@@ -121,9 +187,18 @@ public static class DocumentEndpoints
             return NotFound(id);
         }
 
+        var now = DateTimeOffset.UtcNow;
         Apply(document, request);
-        document.UpdatedAt = DateTimeOffset.UtcNow;
+        document.UpdatedAt = now;
 
+        var documentEvent = new DocumentEvent(
+            Guid.NewGuid(),
+            document.Id,
+            DocumentEventTypes.Updated,
+            now,
+            document);
+
+        db.OutboxMessages.Add(OutboxMessageFactory.Create(documentEvent));
         await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(document);
@@ -142,6 +217,14 @@ public static class DocumentEndpoints
             return NotFound(id);
         }
 
+        var documentEvent = new DocumentEvent(
+            Guid.NewGuid(),
+            document.Id,
+            DocumentEventTypes.Deleted,
+            DateTimeOffset.UtcNow,
+            Document: null);
+
+        db.OutboxMessages.Add(OutboxMessageFactory.Create(documentEvent));
         db.Documents.Remove(document);
         await db.SaveChangesAsync(cancellationToken);
 
