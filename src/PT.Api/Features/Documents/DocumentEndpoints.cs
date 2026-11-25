@@ -6,6 +6,7 @@ using PT.Api.Common;
 using PT.Domain.Entities;
 using PT.Domain.Events;
 using PT.Infrastructure.Data;
+using PT.Infrastructure.Export;
 using PT.Infrastructure.Outbox;
 
 namespace PT.Api.Features.Documents;
@@ -37,6 +38,12 @@ public static class DocumentEndpoints
             .Produces<DocumentEventFeedPage>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .AddEndpointFilter<ValidationFilter<DocumentEventQuery>>();
+
+        group.MapPost("/export", ExportAsync)
+            .WithSummary("Экспортировать все документы в MockSiem")
+            .WithDescription("Батчи по 100 (настраивается), retry на 5xx/408/429, upsert по id.")
+            .Produces<ExportResult>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status502BadGateway);
 
         group.MapGet("/{id:guid}", GetByIdAsync)
             .WithSummary("Получить документ по Id")
@@ -159,6 +166,27 @@ public static class DocumentEndpoints
         var nextSince = items.Count == 0 ? since : items[^1].Sequence;
 
         return Results.Ok(new DocumentEventFeedPage(items, nextSince, hasMore));
+    }
+
+    private static async Task<IResult> ExportAsync(
+        DocumentExportService exportService,
+        CancellationToken cancellationToken)
+    {
+        var result = await exportService.ExportAllAsync(cancellationToken);
+
+        if (result.Total > 0 && result.Exported == 0 && result.Failed > 0)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status502BadGateway,
+                title: "Экспорт не выполнен",
+                detail: "Не удалось экспортировать ни одного документа. Проверьте MockSiem.",
+                extensions: new Dictionary<string, object?>
+                {
+                    ["summary"] = result,
+                });
+        }
+
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> GetByIdAsync(

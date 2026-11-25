@@ -5,7 +5,8 @@ using PT.MockSiem;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton(new MockState(
-    builder.Configuration.GetValue("FailFirstNRequests", 0)));
+    builder.Configuration.GetValue("FailFirstNRequests", 0),
+    builder.Configuration.GetValue("FailFirstNImportRequests", 0)));
 
 var app = builder.Build();
 
@@ -13,13 +14,13 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapGet("/api/v1/events", (MockState state) => Results.Ok(new
 {
-    count = state.Count,
+    count = state.EventCount,
     items = state.Events,
 }));
 
 app.MapPost("/api/v1/events", (JsonElement body, MockState state) =>
 {
-    if (state.ShouldFail())
+    if (state.ShouldFailEvent())
     {
         return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
     }
@@ -30,7 +31,7 @@ app.MapPost("/api/v1/events", (JsonElement body, MockState state) =>
         return Results.BadRequest(new { error = "eventId is required" });
     }
 
-    var added = state.TryAdd(eventId, body.Clone());
+    var added = state.TryAddEvent(eventId, body.Clone());
 
     return Results.Accepted("/api/v1/events", new
     {
@@ -41,7 +42,40 @@ app.MapPost("/api/v1/events", (JsonElement body, MockState state) =>
 
 app.MapDelete("/api/v1/events", (MockState state) =>
 {
-    state.Clear();
+    state.ClearEvents();
+    return Results.NoContent();
+});
+
+app.MapGet("/api/v1/documents", (MockState state) => Results.Ok(new
+{
+    count = state.DocumentCount,
+    items = state.Documents,
+}));
+
+app.MapPost("/api/v1/import", (JsonElement body, MockState state) =>
+{
+    if (state.ShouldFailImport())
+    {
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
+
+    if (!body.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+    {
+        return Results.BadRequest(new { error = "items[] is required" });
+    }
+
+    var (received, added) = state.Import(items.EnumerateArray());
+
+    return Results.Ok(new
+    {
+        received,
+        added,
+    });
+});
+
+app.MapDelete("/api/v1/documents", (MockState state) =>
+{
+    state.ClearDocuments();
     return Results.NoContent();
 });
 

@@ -8,6 +8,7 @@ using PT.Api.Common;
 using PT.Api.Features.Documents;
 using PT.Infrastructure.Data;
 using PT.Infrastructure.Events;
+using PT.Infrastructure.Export;
 using PT.Infrastructure.Outbox;
 using Scalar.AspNetCore;
 
@@ -33,7 +34,15 @@ builder.Services.AddScoped<ValidationFilter<DocumentListQuery>>();
 builder.Services.AddScoped<ValidationFilter<DocumentEventQuery>>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddScoped<OutboxProcessor>();
+builder.Services.AddScoped<DocumentExportService>();
+builder.Services.Configure<ExportOptions>(builder.Configuration.GetSection("Export"));
 builder.Services.AddHttpClient<IEventPublisher, HttpEventPublisher>(client =>
+{
+    var mockSiemBaseUrl = builder.Configuration["MockSiem:BaseUrl"] ?? "http://127.0.0.1:5082/";
+    client.BaseAddress = new Uri(mockSiemBaseUrl.TrimEnd('/') + "/", UriKind.Absolute);
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+builder.Services.AddHttpClient<IExternalDocumentExporter, HttpDocumentExporter>(client =>
 {
     var mockSiemBaseUrl = builder.Configuration["MockSiem:BaseUrl"] ?? "http://127.0.0.1:5082/";
     client.BaseAddress = new Uri(mockSiemBaseUrl.TrimEnd('/') + "/", UriKind.Absolute);

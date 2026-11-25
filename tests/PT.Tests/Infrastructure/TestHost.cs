@@ -6,6 +6,7 @@ using Npgsql;
 using NUnit.Framework;
 using PT.Infrastructure.Data;
 using PT.Infrastructure.Events;
+using PT.Infrastructure.Export;
 
 namespace PT.Tests.Integration;
 
@@ -22,9 +23,12 @@ public sealed class TestHost
 
     public static RecordingEventPublisher EventPublisher { get; private set; } = null!;
 
+    public static RecordingDocumentExporter ExportExporter { get; private set; } = null!;
+
     public static async Task ResetDatabaseAsync()
     {
         EventPublisher.Clear();
+        ExportExporter.Clear();
 
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -61,13 +65,18 @@ public sealed class TestHost
 
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", ConnectionString);
         Environment.SetEnvironmentVariable("Outbox__DispatcherEnabled", "false");
+        Environment.SetEnvironmentVariable("Export__BatchSize", "2");
 
         EventPublisher = new RecordingEventPublisher();
+        ExportExporter = new RecordingDocumentExporter();
         Factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IEventPublisher>();
                 services.AddSingleton<IEventPublisher>(EventPublisher);
+
+                services.RemoveAll<IExternalDocumentExporter>();
+                services.AddSingleton<IExternalDocumentExporter>(ExportExporter);
             }));
 
         using var scope = Factory.Services.CreateScope();
@@ -81,5 +90,6 @@ public sealed class TestHost
         Factory.Dispose();
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", null);
         Environment.SetEnvironmentVariable("Outbox__DispatcherEnabled", null);
+        Environment.SetEnvironmentVariable("Export__BatchSize", null);
     }
 }
