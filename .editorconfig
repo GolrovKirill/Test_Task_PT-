@@ -12,3 +12,9 @@ dotnet_diagnostic.SA1200.severity = none
 dotnet_diagnostic.SA1309.severity = none
 dotnet_diagnostic.SA1413.severity = none
 dotnet_diagnostic.SA1516.severity = none
+
+[tests/**/*.cs]
+# В тестах публичные методы обязательны, а порядок static/instance-членов
+# не влияет на читаемость — не заставляем переставлять их ради SA1202/SA1204.
+dotnet_diagnostic.SA1202.severity = none
+dotnet_diagnostic.SA1204.severity = none
