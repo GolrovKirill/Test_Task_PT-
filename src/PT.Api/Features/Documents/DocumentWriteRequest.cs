@@ -1,13 +1,14 @@
 using PT.Domain.Enums;
 
-namespace PT.Api.Contracts;
+namespace PT.Api.Features.Documents;
 
 /// <summary>
-/// Клиентский контракт создания документа. Серверные поля (Id, CreatedAt, UpdatedAt)
-/// сюда не входят. Nullable-типы позволяют отличить «поле не прислали» от
-/// «прислали значение по умолчанию»: обязательность проверяется валидатором.
+/// Клиентский контракт создания/полного обновления документа. Серверные поля
+/// (Id, CreatedAt, UpdatedAt) сюда не входят. Nullable-типы позволяют отличить
+/// «поле не прислали» от «прислали значение по умолчанию»: обязательность
+/// проверяется валидатором.
 /// </summary>
-public sealed class CreateDocumentRequest
+public sealed record DocumentWriteRequest
 {
     public string? Title { get; init; }
 

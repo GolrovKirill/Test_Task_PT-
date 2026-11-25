@@ -4,9 +4,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using PT.Api.Common;
-using PT.Api.Contracts;
-using PT.Api.Validation;
-using PT.Domain.Entities;
+using PT.Api.Features.Documents;
 using PT.Infrastructure.Data;
 using Scalar.AspNetCore;
 
@@ -26,8 +24,9 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddOpenApi();
 builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
-builder.Services.AddValidatorsFromAssemblyContaining<CreateDocumentRequestValidator>();
-builder.Services.AddScoped<ValidationFilter<CreateDocumentRequest>>();
+builder.Services.AddValidatorsFromAssemblyContaining<DocumentWriteRequestValidator>();
+builder.Services.AddScoped<ValidationFilter<DocumentWriteRequest>>();
+builder.Services.AddScoped<ValidationFilter<DocumentListQuery>>();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(
@@ -41,69 +40,7 @@ await ApplyMigrationsAsync(app.Services);
 app.UseExceptionHandler();
 app.MapOpenApi();
 app.MapScalarApiReference();
-
-app.MapPost("/api/v1/documents", async (
-    CreateDocumentRequest request,
-    AppDbContext db,
-    CancellationToken cancellationToken) =>
-{
-    var now = DateTimeOffset.UtcNow;
-
-    var document = new Document
-    {
-        Id = Guid.NewGuid(),
-        Title = request.Title!.Trim(),
-        Description = request.Description,
-        Content = request.Content!,
-        DocumentType = request.DocumentType!.Value,
-        Status = request.Status!.Value,
-        Confidentiality = request.Confidentiality!.Value,
-        IsPublic = request.IsPublic,
-        Priority = request.Priority!.Value,
-        QualityScore = request.QualityScore!.Value,
-        SizeBytes = request.SizeBytes!.Value,
-        Tags = request.Tags,
-        RelatedDocumentIds = request.RelatedDocumentIds,
-        OwnerEmail = request.OwnerEmail!,
-        EffectiveFrom = request.EffectiveFrom!.Value,
-        ExpiresAt = request.ExpiresAt,
-        CreatedAt = now,
-        UpdatedAt = now,
-        ArchiveDate = request.ArchiveDate,
-        Metadata = request.Metadata,
-    };
-
-    db.Documents.Add(document);
-    await db.SaveChangesAsync(cancellationToken);
-
-    return Results.Created($"/api/v1/documents/{document.Id}", document);
-})
-.WithSummary("Создать документ")
-.WithDescription("Создаёт документ. Id и даты CreatedAt/UpdatedAt назначает сервер.")
-.Produces<Document>(StatusCodes.Status201Created)
-.ProducesProblem(StatusCodes.Status400BadRequest)
-.ProducesProblem(StatusCodes.Status409Conflict)
-.AddEndpointFilter<ValidationFilter<CreateDocumentRequest>>();
-
-app.MapGet("/api/v1/documents/{id:guid}", async (
-    Guid id,
-    AppDbContext db,
-    CancellationToken cancellationToken) =>
-{
-    var document = await db.Documents
-        .AsNoTracking()
-        .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
-
-    return document is null
-        ? Results.Problem(
-            statusCode: StatusCodes.Status404NotFound,
-            title: "Документ не найден",
-            detail: $"Документ с id '{id}' не существует.")
-        : Results.Ok(document);
-})
-.WithSummary("Получить документ по Id")
-.Produces<Document>(StatusCodes.Status200OK)
-.ProducesProblem(StatusCodes.Status404NotFound);
+app.MapDocumentEndpoints();
 
 app.Run();
 

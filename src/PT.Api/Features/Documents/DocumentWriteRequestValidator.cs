@@ -1,17 +1,16 @@
 using System.Text.RegularExpressions;
 using FluentValidation;
-using PT.Api.Contracts;
 using PT.Domain.Enums;
 
-namespace PT.Api.Validation;
+namespace PT.Api.Features.Documents;
 
-public sealed class CreateDocumentRequestValidator : AbstractValidator<CreateDocumentRequest>
+public sealed class DocumentWriteRequestValidator : AbstractValidator<DocumentWriteRequest>
 {
     private static readonly Regex MetadataKeyPattern = new(
         "^[a-z0-9_.-]{1,50}$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    public CreateDocumentRequestValidator()
+    public DocumentWriteRequestValidator()
     {
         RuleLevelCascadeMode = CascadeMode.Stop;
 
