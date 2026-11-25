@@ -18,5 +18,49 @@ services:
       retries: 10
       start_period: 15s
 
+  mock-siem:
+    build:
+      context: .
+      dockerfile: src/PT.MockSiem/Dockerfile
+    container_name: pt-mock-siem
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      FailFirstNRequests: "0"
+      FailFirstNImportRequests: "0"
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: src/PT.Api/Dockerfile
+    container_name: pt-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=pt_test_db;Username=postgres;Password=postgres"
+      MockSiem__BaseUrl: "http://mock-siem:8080/"
+      Outbox__DispatcherEnabled: "true"
+      Export__BatchSize: "100"
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-siem:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
 volumes:
   pt-pgdata:

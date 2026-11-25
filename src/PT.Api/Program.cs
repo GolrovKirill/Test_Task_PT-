@@ -67,6 +67,12 @@ await ApplyMigrationsAsync(app.Services);
 app.UseExceptionHandler();
 app.MapOpenApi();
 app.MapScalarApiReference();
+app.MapGet("/health/live", () => Results.Ok(new { status = "ok" })).WithTags("Health");
+app.MapGet("/health/ready", async (AppDbContext db, CancellationToken cancellationToken) =>
+        await db.Database.CanConnectAsync(cancellationToken)
+            ? Results.Ok(new { status = "ready" })
+            : Results.StatusCode(StatusCodes.Status503ServiceUnavailable))
+    .WithTags("Health");
 app.MapDocumentEndpoints();
 
 app.Run();
