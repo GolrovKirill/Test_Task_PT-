@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+.git/
+.gitignore
+.nuget/
+.tools/
+.vs/
+TestResults/
+tests/
+TZ.pdf
+TZ.txt
+PLAN.md
+README.md

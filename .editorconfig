@@ -1,0 +1,28 @@
+root = true
+
+[*.cs]
+# StyleCop: file headers and XML docs on every member are intentionally not required —
+# for a test assignment readability matters more than a formal SA report.
+dotnet_diagnostic.SA0001.severity = none
+dotnet_diagnostic.SA1633.severity = none
+dotnet_diagnostic.SA1600.severity = none
+dotnet_diagnostic.SA1601.severity = none
+dotnet_diagnostic.SA1101.severity = none
+dotnet_diagnostic.SA1200.severity = none
+dotnet_diagnostic.SA1309.severity = none
+dotnet_diagnostic.SA1413.severity = none
+dotnet_diagnostic.SA1516.severity = none
+
+# C# style preferences applied by the IDE and `dotnet format`.
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_style_prefer_utf8_string_literals = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_constructors = false:suggestion
+dotnet_sort_system_directives_first = true
+dotnet_diagnostic.IDE0005.severity = suggestion
+
+[tests/**/*.cs]
+# Tests require public members, and static/instance member ordering does not affect
+# readability — do not force SA1202/SA1204 reshuffling there.
+dotnet_diagnostic.SA1202.severity = none
+dotnet_diagnostic.SA1204.severity = none

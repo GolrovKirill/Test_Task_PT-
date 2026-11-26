@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: pt-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-pt_test_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pt-pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-pt_test_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  mock-siem:
+    build:
+      context: .
+      dockerfile: src/PT.MockSiem/Dockerfile
+    container_name: pt-mock-siem
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      FailFirstNRequests: "0"
+      FailFirstNImportRequests: "0"
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: src/PT.Api/Dockerfile
+    container_name: pt-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-pt_test_db};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD}"
+      MockSiem__BaseUrl: "http://mock-siem:8080/"
+      Outbox__DispatcherEnabled: "true"
+      Export__BatchSize: "100"
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-siem:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  pt-pgdata:
